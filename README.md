@@ -4,8 +4,7 @@ SculptView3D v1.2
 
 Local browser-based 3D model viewer with stereo3D support for the "Samsung Odyssey3D 4K monitor" or SBS supported devices.
 
-Created by https://drewmedina.com/
-· Freeware MIT
+Created by Drew Medina  https://drewmedina.com/  Check out my 3D videos, Sculptures, Game Development...
 
 ---
 DEMO:
