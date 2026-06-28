@@ -1,0 +1,1860 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SculptView3D by Drew Medina</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg: #0a0a0f; --surface: #12121a; --panel: #1a1a26; --border: #2a2a40;
+    --accent: #6c63ff; --accent2: #ff6b6b; --text: #e8e8f0; --muted: #6b6b8a; --success: #4cffb3;
+  }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+  header { display: flex; align-items: center; justify-content: space-between; padding: 10px 20px; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; z-index: 10; flex-wrap: wrap; gap: 8px; }
+  .logo { display: flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 700; letter-spacing: -0.5px; }
+  .logo-icon { width: 28px; height: 28px; background: linear-gradient(135deg, var(--accent), var(--accent2)); border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+  .controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .btn { padding: 7px 14px; border-radius: 7px; border: 1px solid var(--border); background: var(--panel); color: var(--text); font-size: 13px; cursor: pointer; transition: all 0.15s; white-space: nowrap; }
+  .btn:hover:not(:disabled) { background: var(--border); border-color: var(--accent); }
+  .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+  .btn.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  .btn.accent2 { background: linear-gradient(135deg, var(--accent), #9b6cff); border-color: transparent; color: #fff; font-weight: 600; }
+  .btn.accent2:hover { opacity: 0.85; }
+  .badge { font-size: 10px; background: var(--accent2); color: #fff; padding: 2px 6px; border-radius: 4px; font-weight: 700; letter-spacing: 0.5px; }
+  .sep { width: 1px; height: 24px; background: var(--border); }
+  .viewer-wrap { flex: 1; position: relative; overflow: hidden; }
+  #drop-zone { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 5; transition: opacity 0.3s; }
+  #drop-zone.hidden { opacity: 0; pointer-events: none; }
+  .drop-card { border: 2px dashed var(--border); border-radius: 20px; padding: 50px 70px; text-align: center; background: rgba(108,99,255,0.04); transition: all 0.2s; max-width: 460px; width: 90%; }
+  .drop-card.drag-over { border-color: var(--accent); background: rgba(108,99,255,0.1); transform: scale(1.02); }
+  .drop-icon { font-size: 52px; margin-bottom: 12px; display: block; }
+  .drop-title { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
+  .drop-sub { color: var(--muted); font-size: 13px; line-height: 1.6; margin-bottom: 18px; }
+  .format-pills { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; margin-bottom: 18px; }
+  .pill { font-size: 11px; padding: 3px 9px; background: var(--panel); border: 1px solid var(--border); border-radius: 20px; color: var(--muted); font-family: monospace; }
+  #canvas-container { position: absolute; inset: 0; }
+  canvas { display: block; width: 100% !important; height: 100% !important; }
+  .sbs-label { display: none !important; }  /* replaced by HUD toolbar */
+  .sbs-divider { position: absolute; top: 0; left: 50%; width: 2px; height: 100%; background: rgba(108,99,255,0.35); pointer-events: none; display: none; transform: translateX(-50%); }
+  .sbs-divider.visible { display: block; }
+  .eye-labels { display: none !important; } /* replaced by HUD toolbar */
+  .info-bar { position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); background: rgba(10,10,15,0.85); border: 1px solid var(--border); border-radius: 10px; padding: 7px 16px; font-size: 12px; color: var(--muted); pointer-events: none; backdrop-filter: blur(8px); white-space: nowrap; display: none; }
+  .sidebar { position: absolute; right: 0; top: 0; bottom: 0; width: 220px; background: rgba(18,18,26,0.95); border-left: 1px solid var(--border); backdrop-filter: blur(12px); padding: 16px; display: none; flex-direction: column; gap: 14px; z-index: 4; overflow-y: auto; }
+  .sidebar.visible { display: flex; }
+  .sidebar-title { font-size: 11px; font-weight: 700; letter-spacing: 1.5px; color: var(--muted); text-transform: uppercase; }
+  .slider-row { display: flex; flex-direction: column; gap: 6px; }
+  .slider-label { display: flex; justify-content: space-between; font-size: 12px; }
+  .slider-val { color: var(--accent); font-weight: 600; font-family: monospace; }
+  input[type=range] { -webkit-appearance: none; width: 100%; height: 4px; background: var(--border); border-radius: 2px; outline: none; cursor: pointer; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; background: var(--accent); border-radius: 50%; cursor: pointer; }
+  .divider-line { height: 1px; background: var(--border); }
+  .stat-row { display: flex; justify-content: space-between; font-size: 12px; }
+  .stat-key { color: var(--muted); }
+  .stat-val { color: var(--text); font-family: monospace; }
+  #file-input { display: none; }
+  .loading-overlay { position: absolute; inset: 0; background: rgba(10,10,15,0.85); display: none; align-items: center; justify-content: center; flex-direction: column; gap: 12px; z-index: 8; }
+  .loading-overlay.visible { display: flex; }
+  .spinner { width: 40px; height: 40px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-text { color: var(--muted); font-size: 14px; }
+  .toast { position: absolute; bottom: 50px; left: 50%; transform: translateX(-50%); border-radius: 8px; padding: 10px 18px; font-size: 13px; z-index: 20; display: none; white-space: nowrap; }
+  .toast.error { background: rgba(255,107,107,0.15); border: 1px solid var(--accent2); color: var(--accent2); }
+  .toast.info { background: rgba(76,255,179,0.12); border: 1px solid var(--success); color: var(--success); }
+  .toast.visible { display: block; }
+  select { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 12px; padding: 5px 8px; width: 100%; outline: none; cursor: pointer; }
+  label.chk { font-size: 13px; display: flex; gap: 8px; align-items: center; cursor: pointer; }
+  .color-row { display: flex; align-items: center; gap: 8px; }
+  .color-row label { font-size: 12px; color: var(--text); flex: 1; }
+  input[type=color] { -webkit-appearance: none; appearance: none; width: 28px; height: 22px; border: 1px solid var(--border); border-radius: 5px; background: none; cursor: pointer; padding: 1px; }
+  input[type=color]::-webkit-color-swatch-wrapper { padding: 0; }
+  input[type=color]::-webkit-color-swatch { border: none; border-radius: 3px; }
+
+  /* ── Axis lock toggles ── */
+  .axis-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .axis-btn {
+    padding: 5px 0; border-radius: 6px; border: 1px solid var(--border);
+    background: var(--panel); color: var(--muted); font-size: 12px; font-weight: 700;
+    cursor: pointer; transition: all 0.15s; font-family: monospace; letter-spacing: 0.5px;
+    flex: 1; text-align: center; min-width: 0;
+  }
+  .axis-btn:hover { border-color: var(--accent); color: var(--text); }
+  .axis-btn.locked { background: rgba(255,107,107,0.18); border-color: var(--accent2); color: var(--accent2); }
+  .axis-btn.locked:hover { background: rgba(255,107,107,0.28); }
+  .orient-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; }
+  .orient-btn {
+    padding: 5px 4px; border-radius: 6px; border: 1px solid var(--border);
+    background: var(--panel); color: var(--muted); font-size: 11px; font-weight: 600;
+    cursor: pointer; transition: all 0.15s; text-align: center;
+  }
+  .orient-btn:hover { background: rgba(108,99,255,0.18); border-color: var(--accent); color: var(--text); }
+
+  /* ── Fullscreen ── */
+  :fullscreen body, ::backdrop { background: #000; }
+  :fullscreen header { padding: 8px 20px; }
+  .btn.fs-active { background: linear-gradient(135deg, #ff6b6b, #ff9966); border-color: transparent; color: #fff; font-weight: 600; }
+
+  /* 4K badge shown in fullscreen */
+  .res-badge {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: rgba(0,0,0,0.7);
+    border: 1px solid var(--success);
+    border-radius: 6px;
+    padding: 3px 10px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--success);
+    letter-spacing: 1px;
+    pointer-events: none;
+    display: none;
+    backdrop-filter: blur(6px);
+    z-index: 6;
+  }
+  .res-badge.visible { display: block; }
+
+  /* ── SBS mode: hide ALL UI — pure stereo view ── */
+  body.sbs-mode header    { display: none !important; }
+  body.sbs-mode .sidebar  { display: none !important; }
+  body.sbs-mode .info-bar { display: none !important; }
+  body.sbs-mode .res-badge{ display: none !important; }
+  body.sbs-mode .sbs-hud  { display: none !important; }
+  body.sbs-mode, body.sbs-mode * { cursor: none !important; }
+
+  /* Two HUD panels, one per eye, clipped to left/right half */
+  .sbs-hud {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    pointer-events: none;
+    z-index: 10;
+    display: none;
+  }
+  .sbs-hud.visible { display: block; }
+
+  /* Each eye's HUD panel is clipped to its half then the inner content is
+     positioned to appear centred within that half */
+  .hud-eye {
+    position: absolute;
+    top: 0; bottom: 0;
+    width: 50%;
+    overflow: hidden;
+    pointer-events: none;
+  }
+  .hud-eye.left  { left: 0; }
+  .hud-eye.right { left: 50%; }
+
+  /* The actual floating panel inside each eye */
+  .hud-panel {
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(10,10,18,0.82);
+    border: 1px solid rgba(108,99,255,0.45);
+    border-radius: 12px;
+    backdrop-filter: blur(14px);
+    padding: 8px 12px;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    white-space: nowrap;
+    pointer-events: auto;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+  }
+
+  .hud-btn {
+    padding: 5px 11px;
+    border-radius: 6px;
+    border: 1px solid rgba(108,99,255,0.35);
+    background: rgba(26,26,38,0.9);
+    color: var(--text);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+    font-family: inherit;
+  }
+  .hud-btn:hover { background: rgba(108,99,255,0.25); border-color: var(--accent); }
+  .hud-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  .hud-btn.danger { background: rgba(255,107,107,0.2); border-color: var(--accent2); color: var(--accent2); }
+  .hud-btn.danger:hover { background: rgba(255,107,107,0.35); }
+  .hud-sep { width: 1px; height: 18px; background: rgba(108,99,255,0.3); flex-shrink: 0; }
+  .hud-logo { font-size: 11px; font-weight: 700; color: var(--accent); letter-spacing: 0.5px; opacity: 0.8; }
+
+  /* Settings drawer anchored inside each eye panel — appears below hud-panel */
+  .hud-drawer {
+    position: absolute;
+    top: 52px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(10,10,18,0.92);
+    border: 1px solid rgba(108,99,255,0.35);
+    border-radius: 12px;
+    backdrop-filter: blur(16px);
+    padding: 14px;
+    width: 240px;
+    display: none;
+    flex-direction: column;
+    gap: 12px;
+    pointer-events: auto;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+    z-index: 11;
+  }
+  .hud-drawer.open { display: flex; }
+  /* Right eye: panel is clickable, drawer is read-only visual clone */
+  .hud-eye.right .hud-drawer { pointer-events: none; }
+  .hud-eye.right .hud-panel  { pointer-events: auto; }
+
+  .hud-section { font-size: 10px; font-weight: 700; letter-spacing: 1.5px; color: var(--muted); text-transform: uppercase; }
+  .hud-row { display: flex; flex-direction: column; gap: 5px; }
+  .hud-row-label { display: flex; justify-content: space-between; font-size: 11px; color: var(--text); }
+  .hud-val { color: var(--accent); font-weight: 700; font-family: monospace; font-size: 11px; }
+  .hud-divider { height: 1px; background: rgba(108,99,255,0.2); }
+  .hud-chk { font-size: 11px; display: flex; gap: 7px; align-items: center; cursor: pointer; color: var(--text); }
+  .hud-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; }
+  .hud-stat { font-size: 10px; color: var(--muted); }
+  .hud-stat span { color: var(--text); font-family: monospace; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">⬡</div>
+    <div>
+      <div style="font-size:15px;font-weight:800;letter-spacing:-0.5px;line-height:1.1">SculptView3D <span style="font-size:10px;font-weight:500;color:var(--muted);letter-spacing:0.5px">v1.2</span></div>
+      <div style="font-size:10px;font-weight:400;color:var(--muted);letter-spacing:0.3px">by <a href="https://drewmedina.com/" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none;border-bottom:1px solid rgba(108,99,255,0.4)">Drew Medina</a> &nbsp;·&nbsp; freeware</div>
+    </div>
+  </div>
+  <div class="controls">
+    <button class="btn" id="btn-open">📂 Open File</button>
+    <button class="btn" id="btn-reset" disabled>↺ Reset Camera</button>
+    <div class="sep"></div>
+    <button class="btn" id="btn-orient" disabled title="Quick-orient model to fix wrong facing">⬡ Orient</button>
+    <div class="sep"></div>
+    <button class="btn active" id="btn-normal" disabled>Standard</button>
+    <button class="btn" id="btn-sbs" disabled>👁 SBS Stereo <span class="badge">3D</span></button>
+    <div class="sep"></div>
+    <button class="btn" id="btn-settings" disabled>⚙ Settings</button>
+    <div class="sep"></div>
+    <button class="btn" id="btn-fs" title="Fullscreen 4K (F)">⛶ Fullscreen <span class="badge" style="background:var(--success);color:#000">4K</span></button>
+    <button class="btn" id="btn-help" title="Keyboard shortcuts (?)">⌨ Keys</button>
+  </div>
+</header>
+
+<div class="viewer-wrap" id="viewer-wrap">
+  <div id="drop-zone">
+    <div class="drop-card" id="drop-card">
+      <span class="drop-icon">🗂</span>
+      <div class="drop-title">Drop your 3D model here</div>
+      <div class="drop-sub">Drag &amp; drop a file, or click Browse.<br>The model loads directly in your browser.</div>
+      <div class="format-pills">
+        <span class="pill">.glb</span><span class="pill">.gltf</span><span class="pill">.obj</span>
+        <span class="pill">.stl</span><span class="pill">.ply</span><span class="pill">.fbx</span>
+        <span class="pill">.mtl</span><span class="pill">.png/.jpg</span>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:12px">Drop multiple files together for textured models</div>
+      <button class="btn accent2" id="btn-browse">Browse files</button>
+    </div>
+  </div>
+
+  <div id="canvas-container"></div>
+  <div class="res-badge" id="res-badge">◈ 4K · 3840×2160</div>
+  <div class="sbs-divider" id="sbs-divider"></div>
+  <div class="eye-labels" id="eye-labels">
+    <span class="eye-label">LEFT EYE</span>
+    <span class="eye-label">RIGHT EYE</span>
+  </div>
+  <div class="sbs-label" id="sbs-label">◉ SIDE-BY-SIDE STEREO 3D</div>
+  <div class="info-bar" id="info-bar">Rotate: drag &nbsp;|&nbsp; Pan: right-drag / mid-hold &nbsp;|&nbsp; Scale: scroll &nbsp;|&nbsp; S: shadows</div>
+
+  <div class="loading-overlay" id="loading-overlay">
+    <div class="spinner"></div>
+    <div class="loading-text" id="loading-text">Loading model…</div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <div class="sidebar visible" id="sidebar">
+    <div class="sidebar-title">Stereo Settings</div>
+    <div class="slider-row">
+      <div class="slider-label">Eye Separation <span class="slider-val" id="val-sep">0.150</span></div>
+      <input type="range" id="sl-sep" min="0.005" max="0.4" step="0.001" value="0.150">
+    </div>
+    <div class="slider-row">
+      <div class="slider-label">Convergence Dist <span class="slider-val" id="val-conv">2.30</span></div>
+      <input type="range" id="sl-conv" min="0.1" max="100" step="0.1" value="2.3">
+    </div>
+    <div class="divider-line"></div>
+    <div class="sidebar-title">Lighting</div>
+    <div class="slider-row">
+      <div class="slider-label">Ambient <span class="slider-val" id="val-amb">0.60</span></div>
+      <input type="range" id="sl-amb" min="0" max="3" step="0.05" value="0.6">
+    </div>
+    <div class="color-row">
+      <label>Ambient Color</label>
+      <input type="color" id="col-amb" value="#ffffff">
+    </div>
+    <div class="slider-row">
+      <div class="slider-label">Key Light <span class="slider-val" id="val-key">1.20</span></div>
+      <input type="range" id="sl-key" min="0" max="4" step="0.05" value="1.2">
+    </div>
+    <div class="color-row">
+      <label>Key Light Color</label>
+      <input type="color" id="col-key" value="#ffffff">
+    </div>
+    <div class="slider-row">
+      <div class="slider-label">Fill Light Color</div>
+    </div>
+    <div class="color-row">
+      <label>Fill Light Color</label>
+      <input type="color" id="col-fill" value="#7799ff">
+    </div>
+    <div class="color-row">
+      <label>Rim Light Color</label>
+      <input type="color" id="col-rim" value="#ff9966">
+    </div>
+    <div class="slider-row">
+      <div class="slider-label">BG Brightness <span class="slider-val" id="val-bg">0.08</span></div>
+      <input type="range" id="sl-bg" min="0" max="1" step="0.01" value="0.08">
+    </div>
+    <div class="divider-line"></div>
+    <div class="sidebar-title">Material</div>
+    <div class="slider-row">
+      <div class="slider-label">Metalness <span class="slider-val" id="val-metal">0.45</span></div>
+      <input type="range" id="sl-metal" min="0" max="1" step="0.01" value="0.45">
+    </div>
+    <div class="slider-row">
+      <div class="slider-label">Roughness <span class="slider-val" id="val-rough">0.45</span></div>
+      <input type="range" id="sl-rough" min="0" max="1" step="0.01" value="0.45">
+    </div>
+    <div class="divider-line"></div>
+    <div class="sidebar-title">Display</div>
+    <label class="chk"><input type="checkbox" id="chk-wire"> Wireframe</label>
+    <label class="chk"><input type="checkbox" id="chk-metal-pass" checked> Metal/Roughness Pass</label>
+    <div class="slider-row" style="margin-top:4px">
+      <div class="slider-label">Shading <span class="slider-val" id="val-shade">Textured</span></div>
+      <select id="sel-shade">
+        <option value="textured">Textured</option>
+        <option value="flat">Flat Shaded</option>
+        <option value="matcap">MatCap</option>
+      </select>
+    </div>
+    <div class="slider-row">
+      <div class="slider-label">Model Scale <span class="slider-val" id="val-scale">1.00</span></div>
+      <input type="range" id="sl-scale" min="0.01" max="10" step="0.01" value="1">
+    </div>
+    <div class="divider-line"></div>
+    <div class="sidebar-title">Rotation Axis Lock</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Click to lock an axis (prevent rotation on it)</div>
+    <div class="axis-row">
+      <button class="axis-btn" id="axis-x" title="Lock X axis">X</button>
+      <button class="axis-btn" id="axis-y" title="Lock Y axis">Y</button>
+      <button class="axis-btn" id="axis-z" title="Lock Z axis">Z</button>
+      <button class="axis-btn" id="axis-reset" title="Clear all locks" style="font-size:10px;letter-spacing:0">✕ Clear</button>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin:8px 0 4px">Current view is wrong-side-up? Snap to a preset below, then:</div>
+    <button class="btn" id="btn-bake-up" style="width:100%;font-size:12px;background:rgba(108,99,255,0.15);border-color:var(--accent);color:var(--accent)" title="Treat the current view as the new rotation origin — Y-drag will then spin correctly">⬆ Set View as Rotation Origin</button>
+    <div class="divider-line"></div>
+    <div class="sidebar-title">Quick Orient</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Snap model to a view to fix wrong-facing models</div>
+    <div class="orient-row">
+      <button class="orient-btn" data-orient="front">Front</button>
+      <button class="orient-btn" data-orient="back">Back</button>
+      <button class="orient-btn" data-orient="left">Left</button>
+      <button class="orient-btn" data-orient="right">Right</button>
+      <button class="orient-btn" data-orient="top">Top</button>
+      <button class="orient-btn" data-orient="bottom">Bottom</button>
+    </div>
+    <div class="divider-line"></div>
+    <div class="sidebar-title">Model Info</div>
+    <div class="stat-row"><span class="stat-key">Format</span><span class="stat-val" id="stat-fmt">—</span></div>
+    <div class="stat-row"><span class="stat-key">Meshes</span><span class="stat-val" id="stat-meshes">—</span></div>
+    <div class="stat-row"><span class="stat-key">Vertices</span><span class="stat-val" id="stat-verts">—</span></div>
+    <div class="stat-row"><span class="stat-key">Triangles</span><span class="stat-val" id="stat-faces">—</span></div>
+  </div>
+  <!-- SBS HUD: duplicated into left + right eye panels -->
+  <div class="sbs-hud" id="sbs-hud">
+    <!-- LEFT eye — fully interactive -->
+    <div class="hud-eye left" id="hud-left">
+      <div class="hud-panel">
+        <span class="hud-logo">⬡ SculptView3D</span>
+        <div class="hud-sep"></div>
+        <button class="hud-btn" id="hud-btn-open">📂</button>
+        <button class="hud-btn" id="hud-btn-reset">↺</button>
+        <div class="hud-sep"></div>
+        <button class="hud-btn danger" id="hud-btn-exit">✕ Exit 3D</button>
+        <button class="hud-btn" id="hud-btn-settings">⚙</button>
+      </div>
+      <div class="hud-drawer" id="hud-drawer">
+        <div class="hud-section">Stereo</div>
+        <div class="hud-row">
+          <div class="hud-row-label">Eye Sep <span class="hud-val" id="hud-val-sep">0.150</span></div>
+          <input type="range" id="hud-sl-sep" min="0.005" max="0.4" step="0.001" value="0.150">
+        </div>
+        <div class="hud-row">
+          <div class="hud-row-label">Convergence <span class="hud-val" id="hud-val-conv">2.30</span></div>
+          <input type="range" id="hud-sl-conv" min="0.1" max="100" step="0.1" value="2.3">
+        </div>
+        <div class="hud-divider"></div>
+        <div class="hud-section">Lighting</div>
+        <div class="hud-row">
+          <div class="hud-row-label">Ambient <span class="hud-val" id="hud-val-amb">0.60</span></div>
+          <input type="range" id="hud-sl-amb" min="0" max="3" step="0.05" value="0.6">
+        </div>
+        <div class="hud-row">
+          <div class="hud-row-label">Key Light <span class="hud-val" id="hud-val-key">1.20</span></div>
+          <input type="range" id="hud-sl-key" min="0" max="4" step="0.05" value="1.2">
+        </div>
+        <div class="hud-divider"></div>
+        <div class="hud-section">Display</div>
+        <label class="hud-chk"><input type="checkbox" id="hud-chk-wire"> Wireframe</label>
+        <label class="hud-chk"><input type="checkbox" id="hud-chk-metal-pass" checked> Metal/Rough Pass</label>
+        <div class="hud-row" style="margin-top:4px">
+          <div class="hud-row-label">Shading <span class="hud-val" id="hud-val-shade">Textured</span></div>
+          <select id="hud-sel-shade" style="background:var(--panel);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:11px;padding:3px 6px;width:100%;cursor:pointer">
+            <option value="textured">Textured</option>
+            <option value="flat">Flat Shaded</option>
+            <option value="matcap">MatCap</option>
+          </select>
+        </div>
+        <div class="hud-row">
+          <div class="hud-row-label">Scale <span class="hud-val" id="hud-val-scale">1.00</span></div>
+          <input type="range" id="hud-sl-scale" min="0.01" max="10" step="0.01" value="1">
+        </div>
+        <div class="hud-divider"></div>
+        <div class="hud-section">Model</div>
+        <div class="hud-stats">
+          <div class="hud-stat">Format <span id="hud-stat-fmt">—</span></div>
+          <div class="hud-stat">Meshes <span id="hud-stat-meshes">—</span></div>
+          <div class="hud-stat">Verts <span id="hud-stat-verts">—</span></div>
+          <div class="hud-stat">Tris <span id="hud-stat-faces">—</span></div>
+        </div>
+      </div>
+    </div>
+    <!-- RIGHT eye — visual mirror, non-interactive (CSS handles this) -->
+    <div class="hud-eye right" id="hud-right">
+      <div class="hud-panel">
+        <span class="hud-logo">⬡ SculptView3D</span>
+        <div class="hud-sep"></div>
+        <button class="hud-btn">📂</button>
+        <button class="hud-btn">↺</button>
+        <div class="hud-sep"></div>
+        <button class="hud-btn danger">✕ Exit 3D</button>
+        <button class="hud-btn">⚙</button>
+      </div>
+      <div class="hud-drawer" id="hud-drawer-r">
+        <div class="hud-section">Stereo</div>
+        <div class="hud-row">
+          <div class="hud-row-label">Eye Sep <span class="hud-val" id="hud-val-sep-r">0.150</span></div>
+          <input type="range" id="hud-sl-sep-r" min="0.005" max="0.4" step="0.001" value="0.150">
+        </div>
+        <div class="hud-row">
+          <div class="hud-row-label">Convergence <span class="hud-val" id="hud-val-conv-r">2.30</span></div>
+          <input type="range" id="hud-sl-conv-r" min="0.1" max="100" step="0.1" value="2.3">
+        </div>
+        <div class="hud-divider"></div>
+        <div class="hud-section">Lighting</div>
+        <div class="hud-row">
+          <div class="hud-row-label">Ambient <span class="hud-val" id="hud-val-amb-r">0.60</span></div>
+          <input type="range" id="hud-sl-amb-r" min="0" max="3" step="0.05" value="0.6">
+        </div>
+        <div class="hud-row">
+          <div class="hud-row-label">Key Light <span class="hud-val" id="hud-val-key-r">1.20</span></div>
+          <input type="range" id="hud-sl-key-r" min="0" max="4" step="0.05" value="1.2">
+        </div>
+        <div class="hud-divider"></div>
+        <div class="hud-section">Display</div>
+        <label class="hud-chk"><input type="checkbox" id="hud-chk-wire-r"> Wireframe</label>
+        <label class="hud-chk"><input type="checkbox" id="hud-chk-metal-pass-r" checked> Metal/Rough Pass</label>
+        <div class="hud-row" style="margin-top:4px">
+          <div class="hud-row-label">Shading <span class="hud-val" id="hud-val-shade-r">Textured</span></div>
+        </div>
+        <div class="hud-row">
+          <div class="hud-row-label">Scale <span class="hud-val" id="hud-val-scale-r">1.00</span></div>
+          <input type="range" id="hud-sl-scale-r" min="0.01" max="10" step="0.01" value="1">
+        </div>
+        <div class="hud-divider"></div>
+        <div class="hud-section">Model</div>
+        <div class="hud-stats">
+          <div class="hud-stat">Format <span id="hud-stat-fmt-r">—</span></div>
+          <div class="hud-stat">Meshes <span id="hud-stat-meshes-r">—</span></div>
+          <div class="hud-stat">Verts <span id="hud-stat-verts-r">—</span></div>
+          <div class="hud-stat">Tris <span id="hud-stat-faces-r">—</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Keyboard Help Modal ── -->
+<div id="key-modal" style="
+  display:none; position:fixed; inset:0; z-index:200;
+  background:rgba(0,0,0,0.75); backdrop-filter:blur(8px);
+  align-items:center; justify-content:center;">
+  <div style="
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:16px; padding:28px 32px; max-width:520px; width:90%;
+    max-height:85vh; overflow-y:auto; position:relative;
+    box-shadow:0 24px 64px rgba(0,0,0,0.6);">
+    <button id="key-modal-close" style="
+      position:absolute; top:14px; right:16px;
+      background:none; border:none; color:var(--muted);
+      font-size:20px; cursor:pointer; line-height:1;">✕</button>
+    <div style="font-size:17px;font-weight:800;margin-bottom:4px;color:var(--text)">⌨ Keyboard Shortcuts</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:20px">SculptView3D by <a href="https://drewmedina.com/" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none;border-bottom:1px solid rgba(108,99,255,0.4)">Drew Medina</a> &nbsp;·&nbsp; freeware</div>
+    <table style="width:100%;border-collapse:collapse;font-size:13px;">
+      <thead>
+        <tr style="color:var(--muted);font-size:10px;letter-spacing:1px;text-transform:uppercase">
+          <th style="text-align:left;padding:4px 8px 8px 0;border-bottom:1px solid var(--border)">Key</th>
+          <th style="text-align:left;padding:4px 0 8px 8px;border-bottom:1px solid var(--border)">Action</th>
+        </tr>
+      </thead>
+      <tbody id="key-table-body">
+        <tr><td colspan="2" style="padding:10px 0 4px;color:var(--accent);font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase">VIEW</td></tr>
+        <tr class="kr"><td class="kk">F</td><td class="kv">Toggle fullscreen 4K</td></tr>
+        <tr class="kr"><td class="kk">Escape</td><td class="kv">Exit SBS / fullscreen</td></tr>
+        <tr><td colspan="2" style="padding:10px 0 4px;color:var(--accent);font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase">STEREO</td></tr>
+        <tr class="kr"><td class="kk">+ / =</td><td class="kv">Increase eye separation</td></tr>
+        <tr class="kr"><td class="kk">−</td><td class="kv">Decrease eye separation</td></tr>
+        <tr class="kr"><td class="kk">]</td><td class="kv">Increase convergence distance</td></tr>
+        <tr class="kr"><td class="kk">[ </td><td class="kv">Decrease convergence distance</td></tr>
+        <tr><td colspan="2" style="padding:10px 0 4px;color:var(--accent);font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase">MODEL</td></tr>
+        <tr class="kr"><td class="kk">T</td><td class="kv">Toggle texture / flat shaded</td></tr>
+        <tr class="kr"><td class="kk">S</td><td class="kv">Toggle shadows on / off</td></tr>
+        <tr class="kr"><td class="kk">0</td><td class="kv">Scale model up (×1.1)</td></tr>
+        <tr class="kr"><td class="kk">9</td><td class="kv">Scale model down (÷1.1)</td></tr>
+        <tr><td colspan="2" style="padding:10px 0 4px;color:var(--accent);font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase">PLAYBACK</td></tr>
+        <tr class="kr"><td class="kk">Space</td><td class="kv">Toggle auto-rotate on / off</td></tr>
+        <tr class="kr"><td class="kk">1</td><td class="kv">Rotation speed: slow</td></tr>
+        <tr class="kr"><td class="kk">2</td><td class="kv">Rotation speed: medium</td></tr>
+        <tr class="kr"><td class="kk">3</td><td class="kv">Rotation speed: fast</td></tr>
+        <tr class="kr"><td class="kk">4</td><td class="kv">Rotation speed: superfast</td></tr>
+        <tr><td colspan="2" style="padding:10px 0 4px;color:var(--accent);font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase">LIGHTING</td></tr>
+        <tr class="kr"><td class="kk">Q / W</td><td class="kv">Key light down / up</td></tr>
+        <tr class="kr"><td class="kk">E / R</td><td class="kv">Ambient light down / up</td></tr>
+        <tr><td colspan="2" style="padding:10px 0 4px;color:var(--accent);font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase">MOUSE</td></tr>
+        <tr class="kr"><td class="kk">Left drag</td><td class="kv">Rotate model</td></tr>
+        <tr class="kr"><td class="kk">Right drag</td><td class="kv">Pan camera</td></tr>
+        <tr class="kr"><td class="kk">Middle hold</td><td class="kv">Pan camera</td></tr>
+        <tr class="kr"><td class="kk">Scroll</td><td class="kv">Scale model up / down</td></tr>
+        <tr><td colspan="2" style="padding:10px 0 4px;color:var(--accent);font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase">HELP</td></tr>
+        <tr class="kr"><td class="kk">K</td><td class="kv">Key legend in 3D scene</td></tr>
+        <tr class="kr"><td class="kk">? or /</td><td class="kv">Key reference (2D overlay)</td></tr>
+      </tbody>
+    </table>
+    <style>
+      .kr { border-bottom: 1px solid rgba(255,255,255,0.04); }
+      .kr:hover { background: rgba(108,99,255,0.06); }
+      .kk { padding: 7px 8px 7px 0; font-family: monospace; color: var(--accent);
+            font-weight: 700; white-space: nowrap; vertical-align: top; min-width: 110px; }
+      .kv { padding: 7px 0; color: var(--text); }
+    </style>
+  </div>
+</div>
+
+<input type="file" id="file-input" accept=".glb,.gltf,.obj,.mtl,.stl,.ply,.fbx,.png,.jpg,.jpeg,.webp,.bmp,.tga" multiple>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.158.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.158.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
+import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
+import { STLLoader } from 'three/addons/loaders/STLLoader.js';
+import { PLYLoader } from 'three/addons/loaders/PLYLoader.js';
+import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+
+// ── Renderer ─────────────────────────────────────────────────────────────────
+const container = document.getElementById('canvas-container');
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+container.appendChild(renderer.domElement);
+
+// ── Scene ────────────────────────────────────────────────────────────────────
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0d0d16);
+
+// ── Camera — fixed, always looks at origin ───────────────────────────────────
+const camera = new THREE.PerspectiveCamera(55, 1, 0.001, 100000);
+camera.position.set(0, 0, 5);
+camera.lookAt(0, 0, 0);
+
+// ── Model pivot — all interaction rotates/zooms this, not the camera ─────────
+const pivot = new THREE.Group();
+scene.add(pivot);
+
+// Model scale state
+let modelScale = 1.0;
+
+// Interaction state
+let isDragging = false;
+let isRightDrag = false;
+let isMiddleDrag = false;
+let lastMouse = { x: 0, y: 0 };
+let rotateX = 0, rotateY = 0;   // kept for compat with fitCamera / orient presets
+let camDist = 5;                 // distance along Z (zoom)
+let panX = 0, panY = 0;         // camera pan offset
+
+// ── Quaternion trackball rotation ─────────────────────────────────────────────
+// Accumulate rotation as a quaternion so every drag is relative to the current
+// view — dragging right always spins around the screen-up axis, dragging up
+// always tilts around the screen-right axis, regardless of current orientation.
+let pivotQ = new THREE.Quaternion();
+
+function applyDragDelta(dx, dy) {
+  const upWorld    = new THREE.Vector3(0, 1, 0);
+  const rightWorld = new THREE.Vector3(1, 0, 0);
+  const speed = 0.005;
+  if (!axisLock.y) {
+    const qY = new THREE.Quaternion().setFromAxisAngle(upWorld, dx * speed);
+    pivotQ.premultiply(qY);
+  }
+  if (!axisLock.x) {
+    const qX = new THREE.Quaternion().setFromAxisAngle(rightWorld, dy * speed);
+    pivotQ.premultiply(qX);
+  }
+  pivot.quaternion.copy(pivotQ);
+}
+
+// ── Axis lock state ──────────────────────────────────────────────────────────
+const axisLock = { x: false, y: false, z: false };
+
+function applyCameraTransform() {
+  camera.position.set(panX, panY, camDist);
+  camera.lookAt(panX, panY, 0);
+}
+
+const canvas = renderer.domElement;
+
+// ── Interaction — mouse / touch ──────────────────────────────────────────────
+// We listen on the CONTAINER (not the canvas) so HUD elements that sit above
+// the canvas in z-order receive their own events normally. We only start a
+// drag if the initial target IS the canvas (not a HUD button/slider).
+
+function isCanvasTarget(e) {
+  // Reject if the click originated inside any HUD panel or drawer
+  if (e.target.closest && e.target.closest('.hud-panel, .hud-drawer, .sidebar')) return false;
+  return e.target === canvas || e.target === container;
+}
+
+container.addEventListener('mousedown', e => {
+  if (!isCanvasTarget(e)) return;
+  // Middle-click hold = pan camera
+  if (e.button === 1) {
+    e.preventDefault();
+    isDragging = true;
+    isMiddleDrag = true;
+    isRightDrag = false;
+    lastMouse = { x: e.clientX, y: e.clientY };
+    return;
+  }
+  isDragging = true;
+  isRightDrag = e.button === 2;
+  lastMouse = { x: e.clientX, y: e.clientY };
+});
+
+window.addEventListener('mouseup', e => {
+  isDragging = false;
+  isMiddleDrag = false;
+});
+
+window.addEventListener('mousemove', e => {
+  if (!isDragging) return;
+  const dx = e.clientX - lastMouse.x;
+  const dy = e.clientY - lastMouse.y;
+  lastMouse = { x: e.clientX, y: e.clientY };
+
+  if (isRightDrag || isMiddleDrag) {
+    const panSpeed = camDist * 0.001;
+    panX -= dx * panSpeed;
+    panY += dy * panSpeed;
+    applyCameraTransform();
+  } else {
+    applyDragDelta(dx, dy);
+  }
+});
+
+container.addEventListener('wheel', e => {
+  if (!isCanvasTarget(e)) return;
+  e.preventDefault();
+  const factor = e.deltaY > 0 ? 1 / 1.05 : 1.05;
+  applyModelScale(parseFloat((modelScale * factor).toFixed(4)));
+}, { passive: false });
+
+container.addEventListener('contextmenu', e => { if (isCanvasTarget(e)) e.preventDefault(); });
+container.addEventListener('auxclick',    e => { if (e.button === 1) e.preventDefault(); });
+
+// Touch support
+let lastTouches = [];
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  lastTouches = Array.from(e.touches);
+}, { passive: false });
+
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  const touches = Array.from(e.touches);
+  if (touches.length === 1 && lastTouches.length === 1) {
+    const dx = touches[0].clientX - lastTouches[0].clientX;
+    const dy = touches[0].clientY - lastTouches[0].clientY;
+    applyDragDelta(dx, dy);
+  } else if (touches.length === 2 && lastTouches.length === 2) {
+    const dNow  = Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
+    const dPrev = Math.hypot(lastTouches[0].clientX - lastTouches[1].clientX, lastTouches[0].clientY - lastTouches[1].clientY);
+    const factor = dPrev / dNow;
+    camDist = Math.max(camera.near * 10, Math.min(camera.far * 0.5, camDist * factor));
+    applyCameraTransform();
+  }
+  lastTouches = touches;
+}, { passive: false });
+
+// ── Auto-rotation ────────────────────────────────────────────────────────────
+let autoRotate     = false;
+let autoRotSpeed   = 0.002;  // radians per frame (default speed 1)
+const ROT_SPEEDS   = [0.001, 0.002, 0.004, 0.012]; // speed 1 (slow), 2 (med), 3 (fast), 4 (superfast)
+let autoRotSpeedIdx = 1;
+
+function setAutoRotSpeed(idx) {
+  autoRotSpeedIdx = Math.max(0, Math.min(ROT_SPEEDS.length - 1, idx));
+  autoRotSpeed    = ROT_SPEEDS[autoRotSpeedIdx];
+  const labels    = ['Slow', 'Medium', 'Fast', 'Superfast'];
+  toast(`↻ Rotation speed: ${labels[autoRotSpeedIdx]}`, 'info', 1200);
+}
+
+// Dummy controls object so existing code that calls controls.update() won't break
+const controls = { update: () => {} };
+
+// ── Lights ───────────────────────────────────────────────────────────────────
+const ambLight = new THREE.AmbientLight(0xffffff, 0.6);
+scene.add(ambLight);
+
+const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+dirLight.position.set(5, 10, 7);
+dirLight.castShadow = true;
+dirLight.shadow.mapSize.set(2048, 2048);
+scene.add(dirLight);
+
+const fillLight = new THREE.DirectionalLight(0x7799ff, 0.35);
+fillLight.position.set(-5, 3, -5);
+scene.add(fillLight);
+
+const rimLight = new THREE.DirectionalLight(0xff9966, 0.2);
+rimLight.position.set(0, -3, -5);
+scene.add(rimLight);
+
+// ── Shadow toggle ─────────────────────────────────────────────────────────────
+let shadowsEnabled = true;
+
+function toggleShadows() {
+  shadowsEnabled = !shadowsEnabled;
+  renderer.shadowMap.enabled = shadowsEnabled;
+  dirLight.castShadow = shadowsEnabled;
+  // Force shadow map refresh
+  renderer.shadowMap.needsUpdate = true;
+  if (model) {
+    model.traverse(n => {
+      if (n.isMesh) {
+        n.castShadow    = shadowsEnabled;
+        n.receiveShadow = shadowsEnabled;
+      }
+    });
+  }
+  toast(shadowsEnabled ? '🌑 Shadows ON' : '🌑 Shadows OFF', 'info', 1500);
+}
+
+// ── Grid ─────────────────────────────────────────────────────────────────────
+const grid = new THREE.GridHelper(20, 40, 0x2a2a40, 0x1a1a2e);
+grid.visible = false;
+scene.add(grid);
+
+// ── SBS State ────────────────────────────────────────────────────────────────
+let hudDrawerOpen = false;
+let isSBS = false;
+let eyeSep = 0.150;
+let convergenceDist = 2.30;
+let model = null;
+let wireframeOn = false;
+let shadingMode = 'textured'; // 'textured' | 'flat' | 'matcap'
+
+// MatCap texture (generated programmatically — a simple sphere shading)
+function makeMatCapTexture() {
+  const size = 256;
+  const canvas2d = document.createElement('canvas');
+  canvas2d.width = canvas2d.height = size;
+  const ctx = canvas2d.getContext('2d');
+  const grad = ctx.createRadialGradient(size*0.35, size*0.35, 0, size/2, size/2, size/2);
+  grad.addColorStop(0,   '#ffffff');
+  grad.addColorStop(0.4, '#aaaadd');
+  grad.addColorStop(1,   '#111122');
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(size/2, size/2, size/2, 0, Math.PI*2);
+  ctx.fill();
+  return new THREE.CanvasTexture(canvas2d);
+}
+const matCapTex = makeMatCapTexture();
+
+// Cache of original materials per mesh uuid
+const origMaterials = new Map();
+
+function applyShading(mode) {
+  shadingMode = mode;
+  if (!model) return;
+  model.traverse(n => {
+    if (!n.isMesh) return;
+    // Store originals once
+    if (!origMaterials.has(n.uuid)) {
+      origMaterials.set(n.uuid, Array.isArray(n.material)
+        ? n.material.map(m => m.clone())
+        : n.material.clone());
+    }
+    const orig = origMaterials.get(n.uuid);
+    const origArr = Array.isArray(orig) ? orig : [orig];
+
+    if (mode === 'textured') {
+      n.material = Array.isArray(orig) ? orig.map(m => { m.wireframe = wireframeOn; return m; })
+                                       : (orig.wireframe = wireframeOn, orig);
+    } else if (mode === 'flat') {
+      const make = (src) => {
+        const m = new THREE.MeshStandardMaterial({
+          color: src.color || new THREE.Color(0x999999),
+          roughness: 0.8, metalness: 0.0,
+          wireframe: wireframeOn,
+          flatShading: true,
+        });
+        return m;
+      };
+      n.material = origArr.length > 1 ? origArr.map(make) : make(origArr[0]);
+    } else if (mode === 'matcap') {
+      const make = () => new THREE.MeshMatCapMaterial({
+        matcap: matCapTex,
+        wireframe: wireframeOn,
+      });
+      n.material = origArr.length > 1 ? origArr.map(make) : make();
+    }
+    n.material = Array.isArray(n.material)
+      ? n.material.map(m => { m.needsUpdate = true; return m; })
+      : (n.material.needsUpdate = true, n.material);
+  });
+  // Sync UI
+  document.getElementById('sel-shade').value        = mode;
+  document.getElementById('val-shade').textContent  = {textured:'Textured',flat:'Flat Shaded',matcap:'MatCap'}[mode];
+  const hsl = document.getElementById('hud-sel-shade');
+  if (hsl) hsl.value = mode;
+  const hvs = document.getElementById('hud-val-shade');
+  const hvsr = document.getElementById('hud-val-shade-r');
+  const label = {textured:'Textured',flat:'Flat Shaded',matcap:'MatCap'}[mode];
+  if (hvs)  hvs.textContent  = label;
+  if (hvsr) hvsr.textContent = label;
+}
+
+function applyModelScale(s) {
+  modelScale = Math.max(0.01, Math.min(10, s));
+  if (model) pivot.scale.setScalar(modelScale);
+  document.getElementById('sl-scale').value        = modelScale;
+  document.getElementById('val-scale').textContent = modelScale.toFixed(2);
+  const hs = document.getElementById('hud-sl-scale');
+  const hsr = document.getElementById('hud-sl-scale-r');
+  const hvs = document.getElementById('hud-val-scale');
+  const hvsr = document.getElementById('hud-val-scale-r');
+  if (hs)   hs.value          = modelScale;
+  if (hsr)  hsr.value         = modelScale;
+  if (hvs)  hvs.textContent   = modelScale.toFixed(2);
+  if (hvsr) hvsr.textContent  = modelScale.toFixed(2);
+}
+
+const camL = new THREE.PerspectiveCamera(55, 1, 0.001, 100000);
+const camR = new THREE.PerspectiveCamera(55, 1, 0.001, 100000);
+
+// ── In-scene K legend sprite (shown in 3D view at Z=0 plane) ─────────────────
+let keyLegendSprite = null;
+let keyLegendVisible = false;
+
+function buildKeyLegendSprite() {
+  const lines = [
+    ['VIEW',        null],
+    ['F',           'Fullscreen 4K'],
+    ['Esc',         'Exit 3D / fullscreen'],
+    ['STEREO',      null],
+    ['+  /  =',     'Eye separation up'],
+    ['−',           'Eye separation down'],
+    [']',           'Convergence up'],
+    ['[',           'Convergence down'],
+    ['MODEL',       null],
+    ['T',           'Toggle texture / flat'],
+    ['S',           'Toggle shadows'],
+    ['0',           'Scale up ×1.1'],
+    ['9',           'Scale down ÷1.1'],
+    ['PLAYBACK',    null],
+    ['Space',       'Toggle auto-rotate'],
+    ['1 / 2 / 3 / 4', 'Rotation speed'],
+    ['Mid-hold',    'Pan camera'],
+    ['Scroll',      'Scale model'],
+    ['LIGHTING',    null],
+    ['Q / W',       'Key light −/+'],
+    ['E / R',       'Ambient −/+'],
+    ['OTHER',       null],
+    ['K',           'Toggle key legend (3D)'],
+    ['? or /',      'Key reference (2D)'],
+  ];
+
+  const W = 512, PX = 16, LH = 22, HDR = 38, FOOT = 18;
+  const H = HDR + lines.length * LH + FOOT;
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const ctx = c.getContext('2d');
+
+  // Background
+  ctx.fillStyle = 'rgba(10,10,20,0.88)';
+  roundRect(ctx, 0, 0, W, H, 12);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(108,99,255,0.7)';
+  ctx.lineWidth = 1.5;
+  roundRect(ctx, 0, 0, W, H, 12);
+  ctx.stroke();
+
+  // Title
+  ctx.fillStyle = '#e8e8f0';
+  ctx.font = 'bold 14px system-ui,sans-serif';
+  ctx.fillText('⌨  SculptView3D  Key Reference', PX, 24);
+
+  // Rows
+  lines.forEach(([key, action], i) => {
+    const y = HDR + i * LH + LH - 5;
+    if (action === null) {
+      // Section header
+      ctx.fillStyle = 'rgba(108,99,255,0.9)';
+      ctx.font = 'bold 10px system-ui,sans-serif';
+      ctx.fillText(key, PX, y);
+      ctx.fillStyle = 'rgba(108,99,255,0.3)';
+      ctx.fillRect(PX + ctx.measureText(key).width + 6, y - 6, W - PX*2 - ctx.measureText(key).width - 6, 1);
+    } else {
+      ctx.fillStyle = '#6c63ff';
+      ctx.font = 'bold 11px monospace';
+      ctx.fillText(key, PX + 8, y);
+      ctx.fillStyle = '#c8c8e0';
+      ctx.font = '11px system-ui,sans-serif';
+      ctx.fillText(action, PX + 110, y);
+    }
+  });
+
+  // Footer
+  ctx.fillStyle = 'rgba(107,107,138,0.7)';
+  ctx.font = '9px system-ui,sans-serif';
+  ctx.fillText('K to close  ·  drewmedina.com  ·  SculptView3D', PX, H - 5);
+
+  const tex = new THREE.CanvasTexture(c);
+  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
+  const sprite = new THREE.Sprite(mat);
+  // Scale: keep natural canvas aspect ratio, size in world units
+  const aspect = W / H;
+  sprite.scale.set(aspect * 1.6, 1.6, 1);
+  return sprite;
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+function toggleKeyLegend3D() {
+  keyLegendVisible = !keyLegendVisible;
+  if (keyLegendVisible) {
+    if (!keyLegendSprite) keyLegendSprite = buildKeyLegendSprite();
+    // Position at Z=0 plane, centred, slight left offset so it's visible in both eyes
+    keyLegendSprite.position.set(-0.4, 0, 0);
+    scene.add(keyLegendSprite);
+  } else {
+    if (keyLegendSprite) scene.remove(keyLegendSprite);
+  }
+}
+
+// ── Resize ───────────────────────────────────────────────────────────────────
+function resize() {
+  const w = container.clientWidth || window.innerWidth;
+  const h = container.clientHeight || window.innerHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ── SBS Render ───────────────────────────────────────────────────────────────
+function buildSBSCameras(fullAspect) {
+  [camL, camR].forEach(c => {
+    c.fov  = camera.fov;
+    c.near = camera.near;
+    c.far  = camera.far;
+    c.aspect = fullAspect;
+    c.updateProjectionMatrix();
+  });
+
+  // Camera always looks along -Z toward the model at origin.
+  // Eyes are offset left/right along X. Convergence target is straight ahead.
+  const half = eyeSep / 2;
+  camL.position.set(camera.position.x - half, camera.position.y, camera.position.z);
+  camR.position.set(camera.position.x + half, camera.position.y, camera.position.z);
+
+  // Toe-in: both eyes look at the convergence point on the Z axis
+  const target = new THREE.Vector3(panX, panY, camera.position.z - convergenceDist);
+  camL.lookAt(target);
+  camR.lookAt(target);
+}
+
+function renderSBS() {
+  const w = container.clientWidth  || window.innerWidth;
+  const h = container.clientHeight || window.innerHeight;
+  const hw = Math.floor(w / 2);
+
+  // Half-SBS: each eye camera uses the FULL canvas aspect ratio (w:h).
+  // The image is rendered at full FOV then squeezed into the half-width
+  // panel — a VR headset or 3D TV unsqueezes it back to correct proportions.
+  const fullAspect = w / h;
+  buildSBSCameras(fullAspect);
+
+  renderer.autoClear = false;
+  renderer.clear();
+  renderer.setScissorTest(true);
+
+  // Left eye — left half panel
+  renderer.setViewport(0,  0, hw, h);
+  renderer.setScissor( 0,  0, hw, h);
+  renderer.render(scene, camL);
+
+  // Right eye — right half panel
+  renderer.setViewport(hw, 0, hw, h);
+  renderer.setScissor( hw, 0, hw, h);
+  renderer.render(scene, camR);
+
+  renderer.setScissorTest(false);
+  renderer.autoClear = true;
+}
+
+// ── Animation Loop ────────────────────────────────────────────────────────────
+(function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  if (autoRotate && !isDragging) {
+    if (!axisLock.y) {
+      const qSpin = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0), autoRotSpeed);
+      pivotQ.premultiply(qSpin);
+      pivot.quaternion.copy(pivotQ);
+    }
+  }
+  if (isSBS) {
+    renderSBS();
+  } else {
+    renderer.setViewport(0, 0, container.clientWidth, container.clientHeight);
+    renderer.render(scene, camera);
+  }
+})();
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+function toast(msg, type = 'error', ms = 5000) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = `toast ${type} visible`;
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove('visible'), ms);
+}
+
+function setLoading(on, msg = 'Loading model…') {
+  document.getElementById('loading-text').textContent = msg;
+  document.getElementById('loading-overlay').classList.toggle('visible', on);
+}
+
+function enableUI() {
+  ['btn-reset','btn-normal','btn-sbs','btn-settings','btn-orient'].forEach(id =>
+    document.getElementById(id).disabled = false
+  );
+  document.getElementById('drop-zone').classList.add('hidden');
+  document.getElementById('info-bar').style.display = '';
+}
+
+function fitCamera(obj) {
+  // Reset pivot rotation and scale so bounding box is axis-aligned
+  pivotQ.identity();
+  pivot.quaternion.copy(pivotQ);
+  pivot.scale.setScalar(1);
+  rotateX = 0; rotateY = 0;
+  modelScale = 1.0;
+
+  const box = new THREE.Box3().setFromObject(obj);
+  const size   = box.getSize(new THREE.Vector3());
+  const center = box.getCenter(new THREE.Vector3());
+  const maxDim = Math.max(size.x, size.y, size.z) || 1;
+
+  // Centre model at pivot origin
+  obj.position.set(-center.x, -center.y, -center.z);
+
+  const fovRad = camera.fov * Math.PI / 180;
+  // Base fit distance × 1.8 × 1.1² (two scroll steps out) for comfortable initial view
+  camDist = (maxDim / (2 * Math.tan(fovRad / 2))) * 1.8 * 1.1 * 1.1;
+  panX = 0; panY = 0;
+
+  camera.near = maxDim * 0.0001;
+  camera.far  = maxDim * 1000;
+  camera.updateProjectionMatrix();
+  applyCameraTransform();
+
+  // Set convergence slider range based on model size, keep default at 2.10
+  const sl = document.getElementById('sl-conv');
+  sl.max   = camDist * 6;
+  convergenceDist = 2.30;
+  sl.value = convergenceDist;
+  document.getElementById('val-conv').textContent = convergenceDist.toFixed(2);
+
+  // Scale grid
+  const gs = Math.max(maxDim * 4, 10);
+  grid.scale.setScalar(gs / 20);
+}
+
+function countStats(obj) {
+  let v = 0, f = 0, m = 0;
+  obj.traverse(n => {
+    if (!n.isMesh) return;
+    m++;
+    const g = n.geometry;
+    if (g.attributes.position) v += g.attributes.position.count;
+    if (g.index) f += g.index.count / 3;
+    else if (g.attributes.position) f += g.attributes.position.count / 3;
+  });
+  document.getElementById('stat-verts').textContent  = v.toLocaleString();
+  document.getElementById('stat-faces').textContent  = Math.round(f).toLocaleString();
+  document.getElementById('stat-meshes').textContent = m;
+}
+
+function prepMesh(obj) {
+  obj.traverse(n => {
+    if (!n.isMesh) return;
+    n.castShadow = n.receiveShadow = true;
+    if (!n.material) n.material = new THREE.MeshStandardMaterial({ color: 0xaaaacc });
+  });
+}
+
+// ── File registry — maps filename → blob URL for texture resolution ──────────
+let fileRegistry = {};
+
+function registerFiles(files) {
+  // Revoke old blob URLs to free memory
+  Object.values(fileRegistry).forEach(u => URL.revokeObjectURL(u));
+  fileRegistry = {};
+  for (const f of files) {
+    fileRegistry[f.name.toLowerCase()] = URL.createObjectURL(f);
+    fileRegistry[f.name] = fileRegistry[f.name.toLowerCase()]; // also keep original case
+  }
+}
+
+function makeLoadingManager() {
+  const manager = new THREE.LoadingManager();
+  // Intercept any resource URL: if it looks like a relative filename,
+  // check our registry and serve the local blob URL instead.
+  manager.setURLModifier(url => {
+    // Extract just the filename from whatever path Three.js constructs
+    const filename = url.split('/').pop().split('\\').pop();
+    if (fileRegistry[filename])       return fileRegistry[filename];
+    if (fileRegistry[filename.toLowerCase()]) return fileRegistry[filename.toLowerCase()];
+    return url;
+  });
+  return manager;
+}
+
+// ── Model Loader ──────────────────────────────────────────────────────────────
+function loadModel(files) {
+  // Accept either a single File or an array/FileList
+  const fileList = (files instanceof File) ? [files] : Array.from(files);
+
+  // Register all provided files (model + mtl + textures)
+  registerFiles(fileList);
+
+  // Find the primary 3D model file
+  const modelExts = ['glb','gltf','obj','stl','ply','fbx'];
+  const modelFile = fileList.find(f => modelExts.includes(f.name.split('.').pop().toLowerCase()))
+                 || fileList[0];
+
+  const ext = modelFile.name.split('.').pop().toLowerCase();
+  const url = fileRegistry[modelFile.name] || fileRegistry[modelFile.name.toLowerCase()];
+  const manager = makeLoadingManager();
+
+  const done = (obj) => {
+    setLoading(false);
+    if (model) pivot.remove(model);
+    origMaterials.clear();
+    model = obj;
+    prepMesh(obj);
+    pivot.add(obj);
+    applyMaterialProps();
+    fitCamera(obj);
+    countStats(obj);
+    document.getElementById('stat-fmt').textContent = ext.toUpperCase();
+    enableUI();
+    syncHUD();
+    const texCount = fileList.filter(f => /\.(png|jpe?g|webp|bmp|tga)$/i.test(f.name)).length;
+    const mtlCount = fileList.filter(f => /\.mtl$/i.test(f.name)).length;
+    let msg = `✓ ${modelFile.name} loaded`;
+    if (mtlCount) msg += ` + ${mtlCount} material${mtlCount>1?'s':''}`;
+    if (texCount) msg += ` + ${texCount} texture${texCount>1?'s':''}`;
+    toast(msg, 'info', 4000);
+  };
+
+  const fail = (e) => {
+    setLoading(false);
+    const msg = (e && (e.message || e)) || 'Unknown error';
+    toast(`Failed to load .${ext}: ${msg}`, 'error');
+    console.error(e);
+  };
+
+  setLoading(true, `Loading ${modelFile.name}…`);
+
+  try {
+    if (ext === 'glb' || ext === 'gltf') {
+      // GLTF/GLB handle textures internally — just pass the manager
+      new GLTFLoader(manager).load(url, g => {
+        // Ensure PBR materials render correctly
+        g.scene.traverse(n => {
+          if (n.isMesh && n.material) {
+            const mats = Array.isArray(n.material) ? n.material : [n.material];
+            mats.forEach(m => {
+              m.needsUpdate = true;
+              if (m.map) m.map.colorSpace = THREE.SRGBColorSpace;
+            });
+          }
+        });
+        done(g.scene);
+      }, null, fail);
+
+    } else if (ext === 'obj') {
+      // Check if an MTL file was provided alongside
+      const mtlFile = fileList.find(f => /\.mtl$/i.test(f.name));
+      if (mtlFile) {
+        const mtlUrl = fileRegistry[mtlFile.name] || fileRegistry[mtlFile.name.toLowerCase()];
+        const mtlLoader = new MTLLoader(manager);
+        mtlLoader.load(mtlUrl, materials => {
+          materials.preload();
+          const objLoader = new OBJLoader(manager);
+          objLoader.setMaterials(materials);
+          objLoader.load(url, obj => {
+            // Upgrade Phong materials to Standard for better PBR rendering
+            obj.traverse(n => {
+              if (!n.isMesh) return;
+              const mats = Array.isArray(n.material) ? n.material : [n.material];
+              mats.forEach((m, i) => {
+                if (m.isMeshPhongMaterial || m.isMeshLambertMaterial) {
+                  const std = new THREE.MeshStandardMaterial({
+                    color: m.color,
+                    map: m.map,
+                    normalMap: m.normalMap,
+                    roughness: 1 - (m.shininess || 30) / 100,
+                    metalness: 0.0,
+                    transparent: m.transparent,
+                    opacity: m.opacity,
+                    side: m.side,
+                  });
+                  if (std.map) std.map.colorSpace = THREE.SRGBColorSpace;
+                  if (Array.isArray(n.material)) n.material[i] = std;
+                  else n.material = std;
+                }
+              });
+            });
+            done(obj);
+          }, null, fail);
+        }, null, () => {
+          // MTL failed — load OBJ without materials
+          new OBJLoader(manager).load(url, obj => done(obj), null, fail);
+        });
+      } else {
+        new OBJLoader(manager).load(url, obj => {
+          obj.traverse(n => {
+            if (n.isMesh && !n.material)
+              n.material = new THREE.MeshStandardMaterial({ color: 0xbbbbcc, roughness: 0.7 });
+          });
+          done(obj);
+        }, null, fail);
+      }
+
+    } else if (ext === 'stl') {
+      new STLLoader(manager).load(url, geo => {
+        geo.computeVertexNormals();
+        const mesh = new THREE.Mesh(geo,
+          new THREE.MeshStandardMaterial({ color: 0x8899cc, metalness: 0.15, roughness: 0.6 }));
+        const g = new THREE.Group(); g.add(mesh); done(g);
+      }, null, fail);
+
+    } else if (ext === 'ply') {
+      new PLYLoader(manager).load(url, geo => {
+        geo.computeVertexNormals();
+        const hasColor = geo.hasAttribute('color');
+        const mesh = new THREE.Mesh(geo,
+          new THREE.MeshStandardMaterial({ color: 0xaabbaa, vertexColors: hasColor, roughness: 0.7 }));
+        const g = new THREE.Group(); g.add(mesh); done(g);
+      }, null, fail);
+
+    } else if (ext === 'fbx') {
+      new FBXLoader(manager).load(url, obj => {
+        // FBX often bundles textures as embedded data — manager handles path resolution
+        obj.traverse(n => {
+          if (n.isMesh && n.material) {
+            const mats = Array.isArray(n.material) ? n.material : [n.material];
+            mats.forEach(m => { m.needsUpdate = true; });
+          }
+        });
+        done(obj);
+      }, null, fail);
+
+    } else {
+      fail(`Unsupported format: .${ext}`);
+    }
+  } catch(e) { fail(e); }
+}
+
+// ── Drag & Drop ───────────────────────────────────────────────────────────────
+const viewerWrap = document.getElementById('viewer-wrap');
+const dropCard   = document.getElementById('drop-card');
+
+viewerWrap.addEventListener('dragover', e => {
+  e.preventDefault(); dropCard.classList.add('drag-over');
+});
+viewerWrap.addEventListener('dragleave', e => {
+  if (!viewerWrap.contains(e.relatedTarget)) dropCard.classList.remove('drag-over');
+});
+viewerWrap.addEventListener('drop', e => {
+  e.preventDefault(); dropCard.classList.remove('drag-over');
+  if (e.dataTransfer.files.length) loadModel(e.dataTransfer.files);
+});
+
+const fileInput = document.getElementById('file-input');
+fileInput.addEventListener('change', e => {
+  if (e.target.files.length) loadModel(e.target.files);
+  e.target.value = '';
+});
+document.getElementById('btn-open').addEventListener('click',   () => fileInput.click());
+document.getElementById('btn-browse').addEventListener('click', () => fileInput.click());
+
+// ── Mode Buttons ──────────────────────────────────────────────────────────────
+function setSBS(on) {
+  isSBS = on;
+  document.getElementById('btn-sbs').classList.toggle('active',  on);
+  document.getElementById('btn-normal').classList.toggle('active', !on);
+  document.getElementById('sbs-divider').classList.toggle('visible', on);
+  document.body.classList.toggle('sbs-mode', on);
+  if (on) {
+    // Auto-fullscreen when entering SBS mode
+    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+      enterFullscreen();
+    }
+  } else {
+    // Exit fullscreen when leaving SBS mode
+    if (document.fullscreenElement || document.webkitFullscreenElement) {
+      exitFullscreen();
+    }
+    resize();
+  }
+}
+document.getElementById('btn-normal').addEventListener('click', () => setSBS(false));
+document.getElementById('btn-sbs').addEventListener('click',    () => setSBS(true));
+document.getElementById('btn-reset').addEventListener('click',  () => { if (model) { panX = 0; panY = 0; fitCamera(model); } });
+document.getElementById('btn-settings').addEventListener('click', () =>
+  document.getElementById('sidebar').classList.toggle('visible')
+);
+
+// ── Sliders ───────────────────────────────────────────────────────────────────
+function sl(id, valId, cb) {
+  document.getElementById(id).addEventListener('input', e => {
+    const v = parseFloat(e.target.value);
+    document.getElementById(valId).textContent = v.toFixed(id === 'sl-sep' ? 3 : 2);
+    cb(v);
+  });
+}
+sl('sl-sep',  'val-sep',  v => eyeSep = v);
+sl('sl-conv', 'val-conv', v => convergenceDist = v);
+sl('sl-amb',  'val-amb',  v => ambLight.intensity = v);
+sl('sl-key',  'val-key',  v => dirLight.intensity = v);
+sl('sl-bg',   'val-bg',   v => scene.background = new THREE.Color(v*0.1, v*0.1, v*0.15));
+// ── Material sliders — metalness & roughness ──────────────────────────────────
+let materialMetal = 0.45;
+let materialRoughVal = 0.45;
+let metalPassEnabled = true;
+let materialRough = 0.45;
+
+function applyMaterialProps() {
+  if (!model) return;
+  model.traverse(n => {
+    if (!n.isMesh) return;
+    const mats = Array.isArray(n.material) ? n.material : [n.material];
+    mats.forEach(m => {
+      if (m.isMeshStandardMaterial || m.isMeshPhongMaterial) {
+        m.metalness = metalPassEnabled ? materialMetal : 0.0;
+        m.roughness = metalPassEnabled ? materialRough : 1.0;
+        m.needsUpdate = true;
+      }
+    });
+  });
+}
+
+sl('sl-metal', 'val-metal', v => { materialMetal = v; applyMaterialProps(); });
+sl('sl-rough', 'val-rough', v => { materialRough = v; applyMaterialProps(); });
+
+document.getElementById('chk-wire').addEventListener('change', e => {
+  wireframeOn = e.target.checked;
+  if (!model) return;
+  model.traverse(n => {
+    if (n.isMesh && n.material) {
+      (Array.isArray(n.material) ? n.material : [n.material])
+        .forEach(m => m.wireframe = wireframeOn);
+    }
+  });
+  // sync hud
+  document.getElementById('hud-chk-wire').checked   = wireframeOn;
+  document.getElementById('hud-chk-wire-r').checked = wireframeOn;
+});
+
+document.getElementById('sel-shade').addEventListener('change', e => applyShading(e.target.value));
+document.getElementById('hud-sel-shade').addEventListener('change', e => applyShading(e.target.value));
+
+document.getElementById('sl-scale').addEventListener('input', e => applyModelScale(parseFloat(e.target.value)));
+document.getElementById('hud-sl-scale').addEventListener('input', e => applyModelScale(parseFloat(e.target.value)));
+
+document.getElementById('chk-metal-pass').addEventListener('change', e => {
+  metalPassEnabled = e.target.checked;
+  applyMaterialProps();
+  document.getElementById('hud-chk-metal-pass').checked   = e.target.checked;
+  document.getElementById('hud-chk-metal-pass-r').checked = e.target.checked;
+  syncHUD();
+});
+
+// ── SBS HUD wiring ────────────────────────────────────────────────────────────
+
+// Mirror a value change to both the main sidebar and the right-eye clone
+function syncSlider(mainId, hudId, hudIdR, valId, valIdR, decimals, cb) {
+  function handle(v) {
+    document.getElementById(valId).textContent  = v.toFixed(decimals);
+    document.getElementById(valIdR).textContent = v.toFixed(decimals);
+    // keep main sidebar slider in sync
+    const mainEl = document.getElementById(mainId);
+    if (mainEl) { mainEl.value = v; document.getElementById(mainEl.id.replace('sl-','val-') + (mainEl.id.startsWith('sl-') ? '' : '')); }
+    // sync right-eye clone slider position
+    const rEl = document.getElementById(hudIdR);
+    if (rEl) rEl.value = v;
+    cb(v);
+  }
+  document.getElementById(hudId).addEventListener('input', e => handle(parseFloat(e.target.value)));
+}
+
+syncSlider('sl-sep',  'hud-sl-sep',  'hud-sl-sep-r',  'hud-val-sep',  'hud-val-sep-r',  3, v => { eyeSep = v; document.getElementById('sl-sep').value = v; document.getElementById('val-sep').textContent = v.toFixed(3); });
+syncSlider('sl-conv', 'hud-sl-conv', 'hud-sl-conv-r', 'hud-val-conv', 'hud-val-conv-r', 2, v => { convergenceDist = v; document.getElementById('sl-conv').value = v; document.getElementById('val-conv').textContent = v.toFixed(2); });
+syncSlider('sl-amb',  'hud-sl-amb',  'hud-sl-amb-r',  'hud-val-amb',  'hud-val-amb-r',  2, v => { ambLight.intensity = v; document.getElementById('sl-amb').value = v; document.getElementById('val-amb').textContent = v.toFixed(2); });
+syncSlider('sl-key',  'hud-sl-key',  'hud-sl-key-r',  'hud-val-key',  'hud-val-key-r',  2, v => { dirLight.intensity = v; document.getElementById('sl-key').value = v; document.getElementById('val-key').textContent = v.toFixed(2); });
+
+document.getElementById('hud-chk-wire').addEventListener('change', e => {
+  document.getElementById('chk-wire').checked = e.target.checked;
+  document.getElementById('hud-chk-wire-r').checked = e.target.checked;
+  wireframeOn = e.target.checked;
+  if (!model) return;
+  model.traverse(n => {
+    if (n.isMesh && n.material)
+      (Array.isArray(n.material) ? n.material : [n.material]).forEach(m => m.wireframe = wireframeOn);
+  });
+});
+
+document.getElementById('hud-chk-metal-pass').addEventListener('change', e => {
+  metalPassEnabled = e.target.checked;
+  applyMaterialProps();
+  document.getElementById('chk-metal-pass').checked       = e.target.checked;
+  document.getElementById('hud-chk-metal-pass-r').checked = e.target.checked;
+});
+
+document.getElementById('hud-btn-open').addEventListener('click', () => fileInput.click());
+document.getElementById('hud-btn-reset').addEventListener('click', () => { if (model) { panX = 0; panY = 0; fitCamera(model); } });
+document.getElementById('hud-btn-exit').addEventListener('click', () => setSBS(false));
+
+// Stop pointer events on the HUD from reaching the canvas drag handler.
+// We add a mousedown capture listener on the entire sbs-hud; if the target
+// is an interactive element we stop the event before it reaches the container.
+document.getElementById('sbs-hud').addEventListener('mousedown', e => {
+  const tag = e.target.tagName.toLowerCase();
+  if (['button','input','label','select'].includes(tag) || e.target.closest('.hud-btn, .hud-chk')) {
+    e.stopPropagation();   // don't let this start a canvas drag
+  }
+}, true /* capture */);
+
+document.getElementById('sbs-hud').addEventListener('wheel', e => {
+  e.stopPropagation();
+}, true);
+
+// ── Right-eye HUD buttons — delegate to left-eye handlers ────────────────────
+// The right panel is a visual mirror; its buttons fire the same actions.
+document.getElementById('hud-right').querySelector('.hud-panel').addEventListener('click', e => {
+  const btn = e.target.closest('.hud-btn');
+  if (!btn) return;
+  // Map right-eye buttons by position index to their left-eye counterparts
+  const rightBtns = [...document.querySelectorAll('#hud-right .hud-panel .hud-btn')];
+  const leftBtns  = [...document.querySelectorAll('#hud-left  .hud-panel .hud-btn')];
+  const idx = rightBtns.indexOf(btn);
+  if (idx !== -1 && leftBtns[idx]) leftBtns[idx].click();
+});
+
+document.getElementById('hud-btn-settings').addEventListener('click', () => {
+  hudDrawerOpen = !hudDrawerOpen;
+  document.getElementById('hud-drawer').classList.toggle('open', hudDrawerOpen);
+  document.getElementById('hud-drawer-r').classList.toggle('open', hudDrawerOpen);
+  document.getElementById('hud-btn-settings').classList.toggle('active', hudDrawerOpen);
+});
+
+// Sync HUD values from main sidebar (called after model load etc.)
+function syncHUD() {
+  // sliders
+  ['sep','conv','amb','key'].forEach(k => {
+    const v = document.getElementById(`sl-${k}`)?.value;
+    if (!v) return;
+    document.getElementById(`hud-sl-${k}`).value   = v;
+    document.getElementById(`hud-sl-${k}-r`).value = v;
+  });
+  document.getElementById('hud-val-sep').textContent   = eyeSep.toFixed(3);
+  document.getElementById('hud-val-sep-r').textContent = eyeSep.toFixed(3);
+  document.getElementById('hud-val-conv').textContent   = convergenceDist.toFixed(2);
+  document.getElementById('hud-val-conv-r').textContent = convergenceDist.toFixed(2);
+  document.getElementById('hud-val-amb').textContent   = ambLight.intensity.toFixed(2);
+  document.getElementById('hud-val-amb-r').textContent = ambLight.intensity.toFixed(2);
+  document.getElementById('hud-val-key').textContent   = dirLight.intensity.toFixed(2);
+  document.getElementById('hud-val-key-r').textContent = dirLight.intensity.toFixed(2);
+  // checkboxes
+  document.getElementById('hud-chk-wire').checked   = wireframeOn;
+  document.getElementById('hud-chk-wire-r').checked = wireframeOn;
+  document.getElementById('hud-chk-metal-pass').checked   = metalPassEnabled;
+  document.getElementById('hud-chk-metal-pass-r').checked = metalPassEnabled;
+  // shading + scale
+  const shadeLabel = {textured:'Textured',flat:'Flat Shaded',matcap:'MatCap'}[shadingMode] || 'Textured';
+  document.getElementById('hud-val-shade').textContent   = shadeLabel;
+  document.getElementById('hud-val-shade-r').textContent = shadeLabel;
+  const hsl = document.getElementById('hud-sel-shade');
+  if (hsl) hsl.value = shadingMode;
+  document.getElementById('hud-val-scale').textContent   = modelScale.toFixed(2);
+  document.getElementById('hud-val-scale-r').textContent = modelScale.toFixed(2);
+  const hss = document.getElementById('hud-sl-scale');
+  const hssr = document.getElementById('hud-sl-scale-r');
+  if (hss)  hss.value  = modelScale;
+  if (hssr) hssr.value = modelScale;
+  // update conv slider max range
+  const convMax = document.getElementById('sl-conv').max;
+  document.getElementById('hud-sl-conv').max   = convMax;
+  document.getElementById('hud-sl-conv-r').max = convMax;
+  // stats
+  ['fmt','meshes','verts','faces'].forEach(k => {
+    const v = document.getElementById(`stat-${k}`)?.textContent || '—';
+    const hk = k === 'faces' ? 'faces' : k;
+    const el  = document.getElementById(`hud-stat-${hk}`);
+    const elr = document.getElementById(`hud-stat-${hk}-r`);
+    if (el)  el.textContent  = v;
+    if (elr) elr.textContent = v;
+  });
+}
+
+// ── Fullscreen & 4K ──────────────────────────────────────────────────────────
+const TARGET_4K_W = 3840;
+const TARGET_4K_H = 2160;
+let isFullscreen = false;
+
+function getPixelRatio4K() {
+  // Calculate pixel ratio needed to hit 4K from the current physical canvas size
+  const screenW = window.screen.width  * window.devicePixelRatio;
+  const screenH = window.screen.height * window.devicePixelRatio;
+  // ratio to go from CSS pixels → 4K logical pixels
+  const ratioW = TARGET_4K_W / (container.clientWidth  || window.innerWidth);
+  const ratioH = TARGET_4K_H / (container.clientHeight || window.innerHeight);
+  // Use the smaller ratio so we don't exceed 4K in either axis
+  return Math.min(ratioW, ratioH, 4); // cap at 4x to avoid GPU OOM
+}
+
+function enterFullscreen() {
+  const el = document.documentElement;
+  const req = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
+  if (req) req.call(el);
+}
+
+function exitFullscreen() {
+  const ex = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen;
+  if (ex) ex.call(document);
+}
+
+function onFullscreenChange() {
+  isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement);
+  const btn = document.getElementById('btn-fs');
+  const badge = document.getElementById('res-badge');
+
+  if (isFullscreen) {
+    // Switch to 4K pixel ratio
+    renderer.setPixelRatio(getPixelRatio4K());
+    btn.classList.add('fs-active');
+    btn.textContent = '✕ Exit Fullscreen';
+    badge.classList.add('visible');
+    // Update badge with actual render resolution
+    const canvas = renderer.domElement;
+    const rw = Math.round(canvas.width);
+    const rh = Math.round(canvas.height);
+    badge.textContent = `◈ ${rw}×${rh}`;
+  } else {
+    // Restore normal pixel ratio
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    btn.innerHTML = '⛶ Fullscreen <span class="badge" style="background:var(--success);color:#000">4K</span>';
+    btn.classList.remove('fs-active');
+    badge.classList.remove('visible');
+    // If we left fullscreen while in SBS mode (e.g. browser Escape),
+    // exit SBS too so all menus reappear
+    if (isSBS) {
+      isSBS = false;
+      document.getElementById('btn-sbs').classList.remove('active');
+      document.getElementById('btn-normal').classList.add('active');
+      document.getElementById('sbs-divider').classList.remove('visible');
+      document.body.classList.remove('sbs-mode');
+    }
+  }
+  // Trigger resize to recompute canvas dimensions
+  setTimeout(resize, 50);
+}
+
+document.addEventListener('fullscreenchange',       onFullscreenChange);
+document.addEventListener('webkitfullscreenchange', onFullscreenChange);
+document.addEventListener('mozfullscreenchange',    onFullscreenChange);
+document.addEventListener('MSFullscreenChange',     onFullscreenChange);
+
+document.getElementById('btn-fs').addEventListener('click', () => {
+  if (isFullscreen) exitFullscreen(); else enterFullscreen();
+});
+
+// ── Key Help Modal ───────────────────────────────────────────────────────────
+function toggleHelp() {
+  const m = document.getElementById('key-modal');
+  m.style.display = m.style.display === 'flex' ? 'none' : 'flex';
+}
+document.getElementById('btn-help').addEventListener('click', toggleHelp);
+document.getElementById('key-modal-close').addEventListener('click', toggleHelp);
+document.getElementById('key-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('key-modal')) toggleHelp();
+});
+
+// Keyboard shortcuts
+window.addEventListener('keydown', e => {
+  // Skip shortcuts when typing in an input/slider
+  if (e.target.tagName === 'INPUT') return;
+  if (e.key === '?' || e.key === '/') { toggleHelp(); return; }
+
+  // F key shortcut disabled
+  // if (e.key === 'f' || e.key === 'F') {
+  //   if (isFullscreen) exitFullscreen(); else enterFullscreen();
+  // }
+  if (e.key === 'Escape') {
+    if (isSBS) setSBS(false);
+    else if (isFullscreen) exitFullscreen();
+  }
+  // + / = increase eye separation, - decrease
+  if (e.key === '+' || e.key === '=' ) {
+    eyeSep = Math.min(0.4, parseFloat((eyeSep + 0.005).toFixed(3)));
+    updateSepUI();
+  }
+  if (e.key === '-' || e.key === '_') {
+    eyeSep = Math.max(0.005, parseFloat((eyeSep - 0.005).toFixed(3)));
+    updateSepUI();
+  }
+  // Space = toggle auto-rotation
+  if (e.key === ' ') {
+    e.preventDefault();
+    autoRotate = !autoRotate;
+    toast(autoRotate ? '↻ Auto-rotate ON' : '↻ Auto-rotate OFF', 'info', 1500);
+  }
+  // 1/2/3 = rotation speed
+  if (e.key === '1') setAutoRotSpeed(0);
+  if (e.key === '2') setAutoRotSpeed(1);
+  if (e.key === '3') setAutoRotSpeed(2);
+  if (e.key === '4') setAutoRotSpeed(3);
+  // Q/W = key light down/up, E/R = ambient down/up
+  if (e.key === 'q' || e.key === 'Q') { dirLight.intensity = Math.max(0, parseFloat((dirLight.intensity - 0.1).toFixed(2))); syncLightUI(); }
+  if (e.key === 'w' || e.key === 'W') { dirLight.intensity = Math.min(4,  parseFloat((dirLight.intensity + 0.1).toFixed(2))); syncLightUI(); }
+  if (e.key === 'e' || e.key === 'E') { ambLight.intensity = Math.max(0, parseFloat((ambLight.intensity - 0.1).toFixed(2))); syncLightUI(); }
+  if (e.key === 'r' || e.key === 'R') { ambLight.intensity = Math.min(3,  parseFloat((ambLight.intensity + 0.1).toFixed(2))); syncLightUI(); }
+  // K = toggle in-scene key legend
+  if (e.key === 'k' || e.key === 'K') toggleKeyLegend3D();
+  // T = toggle between textured and flat shaded
+  if (e.key === 't' || e.key === 'T') {
+    applyShading(shadingMode === 'textured' ? 'flat' : 'textured');
+  }
+  // S = toggle shadows
+  if (e.key === 's' || e.key === 'S') {
+    toggleShadows();
+  }
+  // 0 = scale up, 9 = scale down
+  if (e.key === '0') applyModelScale(parseFloat((modelScale * 1.1).toFixed(2)));
+  if (e.key === '9') applyModelScale(parseFloat((modelScale / 1.1).toFixed(2)));
+  // [ / ] adjust convergence distance
+  if (e.key === ']') {
+    convergenceDist = Math.min(parseFloat(document.getElementById('sl-conv').max), parseFloat((convergenceDist + 0.1).toFixed(2)));
+    updateConvUI();
+  }
+  if (e.key === '[') {
+    convergenceDist = Math.max(0.1, parseFloat((convergenceDist - 0.1).toFixed(2)));
+    updateConvUI();
+  }
+});
+
+function updateSepUI() {
+  document.getElementById('sl-sep').value        = eyeSep;
+  document.getElementById('val-sep').textContent = eyeSep.toFixed(3);
+  const hudSep = document.getElementById('hud-sl-sep');
+  const hudSepR = document.getElementById('hud-sl-sep-r');
+  if (hudSep)  { hudSep.value  = eyeSep; document.getElementById('hud-val-sep').textContent  = eyeSep.toFixed(3); }
+  if (hudSepR) { hudSepR.value = eyeSep; document.getElementById('hud-val-sep-r').textContent = eyeSep.toFixed(3); }
+}
+
+function syncLightUI() {
+  // Key light
+  document.getElementById('sl-key').value        = dirLight.intensity;
+  document.getElementById('val-key').textContent = dirLight.intensity.toFixed(2);
+  const hk = document.getElementById('hud-sl-key');
+  const hkr = document.getElementById('hud-sl-key-r');
+  const hvk = document.getElementById('hud-val-key');
+  const hvkr = document.getElementById('hud-val-key-r');
+  if (hk)   hk.value          = dirLight.intensity;
+  if (hkr)  hkr.value         = dirLight.intensity;
+  if (hvk)  hvk.textContent   = dirLight.intensity.toFixed(2);
+  if (hvkr) hvkr.textContent  = dirLight.intensity.toFixed(2);
+  // Ambient
+  document.getElementById('sl-amb').value        = ambLight.intensity;
+  document.getElementById('val-amb').textContent = ambLight.intensity.toFixed(2);
+  const ha = document.getElementById('hud-sl-amb');
+  const har = document.getElementById('hud-sl-amb-r');
+  const hva = document.getElementById('hud-val-amb');
+  const hvar = document.getElementById('hud-val-amb-r');
+  if (ha)   ha.value          = ambLight.intensity;
+  if (har)  har.value         = ambLight.intensity;
+  if (hva)  hva.textContent   = ambLight.intensity.toFixed(2);
+  if (hvar) hvar.textContent  = ambLight.intensity.toFixed(2);
+}
+
+function updateConvUI() {
+  const sl = document.getElementById('sl-conv');
+  sl.value = convergenceDist;
+  document.getElementById('val-conv').textContent = convergenceDist.toFixed(2);
+  const hudConv = document.getElementById('hud-sl-conv');
+  const hudConvR = document.getElementById('hud-sl-conv-r');
+  if (hudConv)  { hudConv.value  = convergenceDist; document.getElementById('hud-val-conv').textContent  = convergenceDist.toFixed(2); }
+  if (hudConvR) { hudConvR.value = convergenceDist; document.getElementById('hud-val-conv-r').textContent = convergenceDist.toFixed(2); }
+}
+
+// ── Light color pickers ───────────────────────────────────────────────────────
+function hexToThreeColor(hex) {
+  return new THREE.Color(hex);
+}
+
+document.getElementById('col-amb').addEventListener('input', e => {
+  ambLight.color.set(e.target.value);
+});
+document.getElementById('col-key').addEventListener('input', e => {
+  dirLight.color.set(e.target.value);
+});
+document.getElementById('col-fill').addEventListener('input', e => {
+  fillLight.color.set(e.target.value);
+});
+document.getElementById('col-rim').addEventListener('input', e => {
+  rimLight.color.set(e.target.value);
+});
+
+// ── Axis Lock UI ─────────────────────────────────────────────────────────────
+function updateAxisUI() {
+  ['x','y','z'].forEach(ax => {
+    const btn = document.getElementById(`axis-${ax}`);
+    btn.classList.toggle('locked', axisLock[ax]);
+    btn.title = axisLock[ax]
+      ? `${ax.toUpperCase()} locked — click to unlock`
+      : `Lock ${ax.toUpperCase()} axis (prevent rotation on it)`;
+  });
+}
+
+['x','y','z'].forEach(ax => {
+  document.getElementById(`axis-${ax}`).addEventListener('click', () => {
+    axisLock[ax] = !axisLock[ax];
+    updateAxisUI();
+    const locked = Object.entries(axisLock).filter(([,v])=>v).map(([k])=>k.toUpperCase()).join(', ');
+    toast(locked ? `🔒 Locked: ${locked}` : '🔓 All axes unlocked', 'info', 1500);
+  });
+});
+
+document.getElementById('axis-reset').addEventListener('click', () => {
+  axisLock.x = axisLock.y = axisLock.z = false;
+  updateAxisUI();
+  toast('🔓 All axes unlocked', 'info', 1200);
+});
+
+// ── Bake View as Rotation Origin ─────────────────────────────────────────────
+// The current pivotQ becomes the new "identity" — subsequent drags accumulate
+// on top of it, so Y-drag will spin correctly around the visible up-axis.
+// This is already how the quaternion system works naturally, so "bake" is
+// really just a confirmation + toast. The button is here for discoverability.
+document.getElementById('btn-bake-up').addEventListener('click', () => {
+  // pivotQ already holds the current orientation — nothing to change.
+  // Just signal to the user that Y will now spin around the current up-axis.
+  toast('⬆ Rotation origin set to current view — Y-drag now spins correctly', 'info', 2500);
+});
+
+// ── Quick Orient ─────────────────────────────────────────────────────────────
+const ORIENT_PRESETS = {
+  front:  [0, 0, 0],
+  back:   [0, Math.PI, 0],
+  left:   [0, -Math.PI / 2, 0],
+  right:  [0,  Math.PI / 2, 0],
+  top:    [-Math.PI / 2, 0, 0],
+  bottom: [ Math.PI / 2, 0, 0],
+};
+
+function applyOrient(preset) {
+  const [rx, ry, rz] = ORIENT_PRESETS[preset];
+  rotateX = rx; rotateY = ry;
+  pivotQ.setFromEuler(new THREE.Euler(rx, ry, rz, 'XYZ'));
+  pivot.quaternion.copy(pivotQ);
+  toast(`⬡ Orient: ${preset.charAt(0).toUpperCase() + preset.slice(1)}`, 'info', 1200);
+}
+
+document.querySelectorAll('.orient-btn').forEach(btn => {
+  btn.addEventListener('click', () => applyOrient(btn.dataset.orient));
+});
+
+// Orient header button opens the settings sidebar + scrolls to the orient section
+const btnOrient = document.getElementById('btn-orient');
+btnOrient.addEventListener('click', () => {
+  const sidebar = document.getElementById('sidebar');
+  if (!sidebar.classList.contains('visible')) {
+    sidebar.classList.add('visible');
+    document.getElementById('btn-settings').classList.add('active');
+  }
+  // Scroll to the orient section inside sidebar
+  const orientTitle = [...sidebar.querySelectorAll('.sidebar-title')]
+    .find(el => el.textContent.includes('Quick Orient'));
+  if (orientTitle) orientTitle.scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
+</script>
+</body>
+</html>
