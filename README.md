@@ -1,6 +1,6 @@
 <img width="901" height="726" alt="screen4" src="https://github.com/user-attachments/assets/4432f516-9efe-47b9-b4c9-fb77dd403f22" />
 
-SculptView3D v1.1
+SculptView3D v1.2
 
 A browser-based 3D model viewer with stereo3D support for the "Samsung Odyssey3D 4K monitor" or any SBS supported devices.
 
