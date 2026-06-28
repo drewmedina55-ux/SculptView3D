@@ -1,17 +1,19 @@
 <img width="901" height="726" alt="screen4" src="https://github.com/user-attachments/assets/4432f516-9efe-47b9-b4c9-fb77dd403f22" />
 
 SculptView3D v1.2
-A browser-based 3D model viewer with stereo3D support for the "Samsung Odyssey3D 4K monitor" or any SBS supported devices.
+
+Local browser-based 3D model viewer with stereo3D support for the "Samsung Odyssey3D 4K monitor" or SBS supported devices.
 
 Created by https://drewmedina.com/
 · Freeware MIT
 
 ---
 DEMO:
+
 Use the live github pages version here!!
 https://drewmedina55-ux.github.io/SculptView3D-Demo/
 
-What It Does:
+<img width="800" height="450" alt="video3D" src="https://github.com/user-attachments/assets/fa681a22-a02a-4bf0-809d-11fef551fdac" />
 
 SculptView3D is a stereoscopic SBS model viewer that lets you drag and drop a 3D model file directly into your browser and inspect it with full rotation, panning, scaling, and lighting controls — no installation, no account, no data sent anywhere. It supports standard and side-by-side stereo 3D viewing modes.
 
