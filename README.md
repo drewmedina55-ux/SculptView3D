@@ -1,4 +1,4 @@
-<img width="827" height="619" alt="Screenshot 2026-06-27 232505 (2)" src="https://github.com/user-attachments/assets/a3247db0-71ee-4be4-b284-5e51f335a999" />
+<img width="901" height="726" alt="Screenshot 2026-06-28 020536s" src="https://github.com/user-attachments/assets/e66d1ab4-4dde-497e-81eb-e2fba7e770f1" />
 
 SculptView3D v1.1
 
